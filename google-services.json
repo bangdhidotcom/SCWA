@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "608328851383",
+    "project_id": "scwa-project",
+    "storage_bucket": "scwa-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:608328851383:android:4f77c1495dde0ee5ab9232",
+        "android_client_info": {
+          "package_name": "com.bangdhi.SCWAApp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnhGp1i2hf-oxh6aW-zO69vhyG8cfE7JY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
