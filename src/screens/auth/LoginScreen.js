@@ -1,128 +1,141 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
-
-// 1. IMPORT "Mesin" authService kita
+import { ActivityIndicator, Alert, Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { authService } from '../../services/authService';
 
 export default function LoginScreen() {
+  const [isRegistering, setIsRegistering] = useState(false); // Mode Login/Daftar
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // State baru untuk loading
-  const [isLoading, setIsLoading] = useState(false); 
+  const [fullName, setFullName] = useState(''); // Nama Lengkap
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleSubmit = async () => {
     if (!email || !password) {
-      Alert.alert("Error", "Email dan Password tidak boleh kosong.");
+      Alert.alert("Error", "Email dan Password wajib diisi.");
       return;
     }
-    
-    setIsLoading(true); // Mulai loading
-    
-    try {
-      // 2. GANTI Alert dengan fungsi login sungguhan
-      await authService.login(email, password);
-      // Jika berhasil, 'onAuthStateChanged' di RootNavigator akan
-      // otomatis mendeteksi dan memindahkan layar.
-      // Kita tidak perlu 'navigation.navigate' di sini.
-    } catch (error) {
-      // 3. Tampilkan error dari Firebase jika login gagal
-      Alert.alert("Login Gagal", error.message);
-    } finally {
-      setIsLoading(false); // Berhenti loading (baik sukses atau gagal)
-    }
-  };
 
-  // Kita tambahkan tombol DAFTAR juga
-  const handleSignUp = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Email dan Password tidak boleh kosong.");
-      return;
-    }
-    setIsLoading(true);
+    setLoading(true);
     try {
-      await authService.signUp(email, password);
-      Alert.alert("Sukses", "Akun berhasil dibuat! Silakan login.");
+      if (isRegistering) {
+        // --- LOGIKA DAFTAR ---
+        if (!fullName) {
+          Alert.alert("Error", "Nama Lengkap wajib diisi untuk pendaftaran.");
+          setLoading(false);
+          return;
+        }
+        
+        await authService.signUp(email, password, fullName);
+        Alert.alert(
+          "Sukses", 
+          "Akun berhasil dibuat! Silakan cek email jika diminta verifikasi, atau langsung login."
+        );
+        setIsRegistering(false); // Kembali ke mode login
+      } else {
+        // --- LOGIKA LOGIN ---
+        await authService.login(email, password);
+        // Jika sukses, App.js akan otomatis ganti layar karena kita pakai listener
+      }
     } catch (error) {
-      Alert.alert("Daftar Gagal", error.message);
+      Alert.alert("Gagal", error.message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>SCWA Login</Text>
-      
+      <Text style={styles.title}>SCWA App</Text>
+      <Text style={styles.subtitle}>
+        {isRegistering ? "Buat Akun Baru" : "Silakan Masuk"}
+      </Text>
+
+      {/* Input Nama (Cuma muncul pas Daftar) */}
+      {isRegistering && (
+        <TextInput
+          style={styles.input}
+          placeholder="Nama Lengkap"
+          value={fullName}
+          onChangeText={setFullName}
+        />
+      )}
+
       <TextInput
         style={styles.input}
         placeholder="Email"
         value={email}
         onChangeText={setEmail}
-        keyboardType="email-address"
         autoCapitalize="none"
-        editable={!isLoading} // Input tidak bisa diketik saat loading
+        keyboardType="email-address"
       />
-      
+
       <TextInput
         style={styles.input}
         placeholder="Password"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
-        editable={!isLoading}
       />
-      
-      {/* Tampilkan loading indicator jika isLoading == true */}
-      {isLoading ? (
-        <ActivityIndicator size="large" color="#0000ff" />
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#0000ff" style={{ marginVertical: 20 }} />
       ) : (
-        <>
-          <View style={styles.buttonContainer}>
-            <Button 
-              title="Login" 
-              onPress={handleLogin}
-            />
-          </View>
-          <View style={styles.buttonContainer}>
-            <Button 
-              title="Daftar Akun Baru" 
-              onPress={handleSignUp}
-              color="#841584" // Warna beda untuk daftar
-            />
-          </View>
-        </>
+        <View style={styles.buttonContainer}>
+          <Button 
+            title={isRegistering ? "Daftar Sekarang" : "Masuk"} 
+            onPress={handleSubmit} 
+          />
+        </View>
       )}
+
+      <TouchableOpacity onPress={() => setIsRegistering(!isRegistering)}>
+        <Text style={styles.switchText}>
+          {isRegistering 
+            ? "Sudah punya akun? Login di sini" 
+            : "Belum punya akun? Daftar di sini"}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    alignItems: 'center', 
+  container: {
+    flex: 1,
     justifyContent: 'center',
     padding: 20,
-    backgroundColor: '#f5f5f5' // Ganti background biar lebih segar
+    backgroundColor: '#fff',
   },
   title: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+    color: '#333',
+  },
+  subtitle: {
+    fontSize: 18,
+    textAlign: 'center',
     marginBottom: 30,
-    color: '#333'
+    color: '#666',
   },
   input: {
-    width: '100%',
-    height: 50,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#ddd',
+    padding: 15,
     borderRadius: 8,
-    paddingHorizontal: 10,
     marginBottom: 15,
-    backgroundColor: '#fff' // Input field warna putih
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
   },
-  // Tambahan style untuk spasi antar tombol
   buttonContainer: {
-    width: '100%',
-    marginVertical: 5, // Beri jarak vertikal antar tombol
-  }
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  switchText: {
+    textAlign: 'center',
+    color: '#007AFF',
+    marginTop: 20,
+    fontSize: 16,
+  },
 });
