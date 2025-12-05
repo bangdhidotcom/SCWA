@@ -5,6 +5,7 @@ import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAlert } from '../../services/AlertContext';
 import { deviceService } from '../../services/deviceService';
+import { supabase } from '../../services/supabase'; // Import Supabase
 import { useTheme } from '../../services/ThemeContext';
 
 const screenWidth = Dimensions.get('window').width;
@@ -19,22 +20,45 @@ export default function RiwayatScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [historyData, setHistoryData] = useState([]);
   const [reversedData, setReversedData] = useState([]);
+  const [deviceId, setDeviceId] = useState(null); // State untuk ID Alat
   
   const [activeMetric, setActiveMetric] = useState('suhu'); 
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, value: 0, index: 0, position: 'top' });
 
   const scrollViewRef = useRef();
 
+  // Fungsi Load Data yang Pintar (Cari ID dulu kalau belum ada)
   const loadData = async () => {
     setIsLoading(true);
     setTooltip({ visible: false, x: 0, y: 0, value: 0, index: 0, position: 'top' }); 
+    
     try {
-      const data = await deviceService.getHistory('SCWA_001');
-      if (data && data.length > 0) {
-        setHistoryData(data);
-        setReversedData([...data].reverse());
+      let currentDeviceId = deviceId;
+
+      // Jika ID belum ada di state, cari dulu ke Supabase
+      if (!currentDeviceId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const device = await deviceService.getUserDevice(user.id);
+          if (device) {
+            currentDeviceId = device.device_id;
+            setDeviceId(currentDeviceId); // Simpan biar nanti ga cari lagi
+          }
+        }
+      }
+
+      if (currentDeviceId) {
+        const data = await deviceService.getHistory(currentDeviceId);
+        if (data && data.length > 0) {
+          setHistoryData(data);
+          setReversedData([...data].reverse());
+        } else {
+          setHistoryData([]);
+          setReversedData([]);
+        }
       }
     } catch (error) {
+      console.error(error);
       showAlert("Gagal", "Gagal memuat data riwayat.", "error");
     } finally {
       setIsLoading(false);
@@ -167,6 +191,10 @@ export default function RiwayatScreen() {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
+        ) : (!deviceId || reversedData.length === 0) ? (
+          <Text style={{ textAlign: 'center', color: colors.subText, marginVertical: 20 }}>
+            {!deviceId ? 'Mencari data alat...' : 'Belum ada data riwayat.'}
+          </Text>
         ) : chartData ? (
           <View style={{ height: CHART_HEIGHT, flexDirection: 'row' }}>
             
@@ -262,9 +290,7 @@ export default function RiwayatScreen() {
               </View>
             </ScrollView>
           </View>
-        ) : (
-          <Text style={{ textAlign: 'center', color: colors.subText, marginVertical: 20 }}>Tidak ada data.</Text>
-        )}
+        ) : null}
       </View>
 
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Log Data Terkini</Text>

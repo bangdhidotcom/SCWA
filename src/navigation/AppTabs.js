@@ -1,17 +1,21 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import DasborScreen from '../screens/app/DasborScreen';
 import KontrolScreen from '../screens/app/KontrolScreen';
+import NotificationScreen from '../screens/app/NotificationScreen';
 import RiwayatScreen from '../screens/app/RiwayatScreen';
+import SettingsScreen from '../screens/app/SettingsScreen';
 
 import { useTheme } from '../services/ThemeContext';
 
 const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
 
-export default function AppTabs() {
-  const { colors, isDark } = useTheme(); // Ambil warna
+function MainTabs() {
+  const { colors, isDark } = useTheme();
 
   return (
     <Tab.Navigator
@@ -31,7 +35,7 @@ export default function AppTabs() {
           right: 20,
           borderRadius: 20,
         },
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({ focused }) => {
           let iconName;
           if (route.name === 'Dasbor') iconName = focused ? 'home' : 'home-outline';
           else if (route.name === 'Kontrol') iconName = focused ? 'game-controller' : 'game-controller-outline';
@@ -52,6 +56,16 @@ export default function AppTabs() {
   );
 }
 
+export default function AppNavigator() {
+  return (
+    <Stack.Navigator screenOptions={{ animation: 'slide_from_right', headerShown: false }}>
+      <Stack.Screen name="MainTabs" component={MainTabs} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Notifications" component={NotificationScreen} />
+    </Stack.Navigator>
+  );
+}
+
 const styles = StyleSheet.create({
   iconContainer: {
     width: 45,
@@ -61,7 +75,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeIcon: {
-    backgroundColor: '#004e92', // Warna biru tema utama
+    backgroundColor: '#004e92',
     shadowColor: '#004e92',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

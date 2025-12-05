@@ -1,33 +1,57 @@
 import { supabase } from './supabase';
 
-// ID Alat (Nanti bisa dibuat dinamis, sekarang hardcode dulu sesuai DB)
-const DEFAULT_DEVICE_ID = 'SCWA_001'; 
-
 export const deviceService = {
-  // Mendengarkan Data Sensor Real-time (Pengganti listenToRbwData)
-  listenToDevice: (deviceId = DEFAULT_DEVICE_ID, callback) => {
-    // 1. Ambil data awal dulu
+  // 1. Ambil Alat milik User yang sedang Login
+  getUserDevice: async (userId) => {
+    // Asumsi: 1 User hanya punya 1 Alat (sesuai MVP)
+    const { data, error } = await supabase
+      .from('devices')
+      .select('*')
+      .eq('owner_id', userId)
+      .single();
+
+    if (error) {
+      console.error("Gagal mengambil data device:", error);
+      return null;
+    }
+    return data;
+  },
+
+  // 2. Simpan/Update Token Notifikasi ke Database
+  updatePushToken: async (deviceId, token) => {
+    const { error } = await supabase
+      .from('devices')
+      .update({ push_token: token })
+      .eq('device_id', deviceId);
+
+    if (error) console.error("Gagal update token:", error);
+  },
+
+  // 3. Mendengarkan Data Sensor (Sekarang butuh parameter deviceId wajib)
+  listenToDevice: (deviceId, callback) => {
+    if (!deviceId) return;
+
+    // Ambil data awal (Snapshot terakhir)
     supabase
       .from('devices')
-      .select('*, sensor_logs(*)') // Ambil device + log terakhir
+      .select('*, sensor_logs(*)')
       .eq('device_id', deviceId)
       .limit(1, { foreignTable: 'sensor_logs' })
       .order('created_at', { foreignTable: 'sensor_logs', ascending: false })
       .single()
       .then(({ data, error }) => {
         if (data && data.sensor_logs && data.sensor_logs.length > 0) {
-          // Gabungkan data device info & sensor log terakhir
           const combinedData = {
             ...data,
-            ...data.sensor_logs[0] // Ambil log sensor terbaru
+            ...data.sensor_logs[0]
           };
           callback(combinedData);
         }
       });
 
-    // 2. Subscribe ke perubahan Realtime (Websocket)
+    // Subscribe ke Realtime (Websocket)
     const channel = supabase
-      .channel('public:sensor_logs')
+      .channel(`public:sensor_logs:${deviceId}`) // Channel unik per alat
       .on(
         'postgres_changes',
         {
@@ -37,20 +61,18 @@ export const deviceService = {
           filter: `device_id=eq.${deviceId}`,
         },
         (payload) => {
-          // Ada data sensor baru masuk!
           callback(payload.new);
         }
       )
       .subscribe();
 
-    // Fungsi cleanup untuk stop listening
     return () => supabase.removeChannel(channel);
   },
 
-  // Update Kontrol Kipas/Audio (Pengganti updatePerintah)
-  updateControl: async (deviceId = DEFAULT_DEVICE_ID, settings) => {
-    // settings contoh: { min_temp_limit: 28, max_temp_limit: 31 }
-    // atau kolom lain yang kamu set di tabel devices
+  // 4. Update Kontrol (Kipas/Audio)
+  updateControl: async (deviceId, settings) => {
+    if (!deviceId) throw new Error("Device ID tidak ditemukan.");
+    
     const { error } = await supabase
       .from('devices')
       .update(settings)
@@ -59,14 +81,16 @@ export const deviceService = {
     if (error) throw error;
   },
 
-  // Ambil Riwayat
-  getHistory: async (deviceId = DEFAULT_DEVICE_ID) => {
+  // 5. Ambil Riwayat Data
+  getHistory: async (deviceId) => {
+    if (!deviceId) return [];
+
     const { data, error } = await supabase
       .from('sensor_logs')
       .select('*')
       .eq('device_id', deviceId)
       .order('created_at', { ascending: false })
-      .limit(50); // Ambil 50 data terakhir
+      .limit(50);
 
     if (error) throw error;
     return data;

@@ -1,33 +1,65 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAlert } from '../../services/AlertContext';
 import { deviceService } from '../../services/deviceService';
+import { supabase } from '../../services/supabase'; // Import Supabase
 import { useTheme } from '../../services/ThemeContext';
 
 export default function KontrolScreen() {
   const { colors, isDark } = useTheme();
   const { showAlert } = useAlert();
+  
   const [activeFanMode, setActiveFanMode] = useState('OTOMATIS'); 
   const [loading, setLoading] = useState(false);
+  const [deviceId, setDeviceId] = useState(null);
+  const [initLoading, setInitLoading] = useState(true); // Loading awal cari alat
+
+  // 1. Ambil ID Alat & Status Terakhir saat layar dibuka
+  useEffect(() => {
+    const fetchDeviceData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const device = await deviceService.getUserDevice(user.id);
+          if (device) {
+            setDeviceId(device.device_id);
+            // Sinkronkan status tombol dengan database
+            if (device.mode_kipas) setActiveFanMode(device.mode_kipas);
+          }
+        }
+      } catch (e) {
+        console.error("Gagal memuat kontrol:", e);
+      } finally {
+        setInitLoading(false);
+      }
+    };
+
+    fetchDeviceData();
+  }, []);
 
   const updateFanMode = async (mode) => {
+    if (!deviceId) return; // Cegah eksekusi jika ID belum ada
+    
     setActiveFanMode(mode);
     setLoading(true);
     try {
-      await deviceService.updateControl('SCWA_001', { mode_kipas: mode });
+      await deviceService.updateControl(deviceId, { mode_kipas: mode });
     } catch (error) {
       showAlert("Gagal", "Gagal mengirim perintah ke alat.", "error");
+      // Kembalikan ke mode sebelumnya jika gagal (opsional, untuk UX lebih baik)
     } finally {
       setLoading(false);
     }
   };
 
   const triggerAudio = async () => {
+    if (!deviceId) return;
+
     setLoading(true);
     try {
-      await deviceService.updateControl('SCWA_001', { panggil_audio: true });
+      await deviceService.updateControl(deviceId, { panggil_audio: true });
       showAlert("Berhasil", "Audio Panggil sedang diputar di RBW.", "success");
     } catch (error) {
       showAlert("Error", error.message, "error");
@@ -45,7 +77,7 @@ export default function KontrolScreen() {
           { backgroundColor: isActive ? colors.primary : (isDark ? '#334155' : '#f5f6fa'), borderColor: isActive ? colors.primary : colors.border }
         ]} 
         onPress={() => updateFanMode(mode)}
-        disabled={loading}
+        disabled={loading || !deviceId} // Disable jika loading atau tidak ada alat
       >
         <Icon name={icon} size={24} color={isActive ? '#fff' : colors.subText} />
         <Text style={[styles.fanButtonText, { color: isActive ? '#fff' : colors.subText }]}>{label}</Text>
@@ -53,52 +85,71 @@ export default function KontrolScreen() {
     );
   };
 
+  if (initLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <Text style={[styles.pageTitle, { color: colors.text }]}>Pusat Kontrol</Text>
       
-      {loading && <ActivityIndicator size="small" color={colors.primary} style={styles.loadingIndicator} />}
-
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.iconBox, { backgroundColor: isDark ? '#334155' : '#ebf5fb' }]}>
-            <Icon name="fan" size={24} color="#3498db" />
-          </View>
-          <View>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Kipas Ventilasi</Text>
-            <Text style={[styles.cardSubtitle, { color: colors.subText }]}>Atur mode sirkulasi udara</Text>
-          </View>
+      {!deviceId ? (
+        <View style={[styles.card, { backgroundColor: colors.card, padding: 30, alignItems: 'center' }]}>
+          <Icon name="alert-circle-outline" size={40} color={colors.subText} />
+          <Text style={{ color: colors.subText, marginTop: 10, textAlign: 'center' }}>
+            Tidak ada alat yang terhubung.
+          </Text>
         </View>
-        
-        <View style={styles.fanControls}>
-          {renderFanButton('Otomatis', 'OTOMATIS', 'robot')}
-          {renderFanButton('Nyala Terus', 'MANUAL_ON', 'power-on')}
-          {renderFanButton('Mati', 'MANUAL_OFF', 'power-off')}
-        </View>
-      </View>
+      ) : (
+        <>
+          {loading && <ActivityIndicator size="small" color={colors.primary} style={styles.loadingIndicator} />}
 
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.iconBox, { backgroundColor: isDark ? '#334155' : '#fef5e7' }]}>
-            <Icon name="speaker-wireless" size={24} color="#e67e22" />
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconBox, { backgroundColor: isDark ? '#334155' : '#ebf5fb' }]}>
+                <Icon name="fan" size={24} color="#3498db" />
+              </View>
+              <View>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Kipas Ventilasi</Text>
+                <Text style={[styles.cardSubtitle, { color: colors.subText }]}>Atur mode sirkulasi udara</Text>
+              </View>
+            </View>
+            
+            <View style={styles.fanControls}>
+              {renderFanButton('Otomatis', 'OTOMATIS', 'robot')}
+              {renderFanButton('Nyala Terus', 'MANUAL_ON', 'power-on')}
+              {renderFanButton('Mati', 'MANUAL_OFF', 'power-off')}
+            </View>
           </View>
-          <View>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Panggil Walet</Text>
-            <Text style={[styles.cardSubtitle, { color: colors.subText }]}>Putar suara panggil manual (10 menit)</Text>
-          </View>
-        </View>
 
-        <TouchableOpacity onPress={triggerAudio} disabled={loading} activeOpacity={0.8}>
-          <LinearGradient
-            colors={['#e67e22', '#f39c12']}
-            style={styles.audioButton}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          >
-            <Icon name="play-circle-outline" size={32} color="#fff" />
-            <Text style={styles.audioButtonText}>PUTAR AUDIO SEKARANG</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconBox, { backgroundColor: isDark ? '#334155' : '#fef5e7' }]}>
+                <Icon name="speaker-wireless" size={24} color="#e67e22" />
+              </View>
+              <View>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Panggil Walet</Text>
+                <Text style={[styles.cardSubtitle, { color: colors.subText }]}>Putar suara panggil manual (10 menit)</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity onPress={triggerAudio} disabled={loading} activeOpacity={0.8}>
+              <LinearGradient
+                colors={['#e67e22', '#f39c12']}
+                style={styles.audioButton}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              >
+                <Icon name="play-circle-outline" size={32} color="#fff" />
+                <Text style={styles.audioButtonText}>PUTAR AUDIO SEKARANG</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
 
     </ScrollView>
   );

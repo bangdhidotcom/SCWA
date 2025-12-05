@@ -1,33 +1,54 @@
-import { createContext, useContext, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createContext, useContext, useEffect, useState } from 'react';
 
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-  const [isDark, setIsDark] = useState(false); // Default Terang
+  const [isDark, setIsDark] = useState(false);
 
-  const toggleTheme = () => setIsDark(!isDark);
+  // 1. Load tema saat aplikasi dibuka
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        const storedTheme = await AsyncStorage.getItem('appTheme');
+        if (storedTheme === 'dark') setIsDark(true);
+      } catch (e) {
+        console.error("Gagal memuat tema:", e);
+      }
+    };
+    loadTheme();
+  }, []);
+
+  // 2. Fungsi ganti tema + simpan
+  const toggleTheme = async () => {
+    const newMode = !isDark;
+    setIsDark(newMode);
+    try {
+      await AsyncStorage.setItem('appTheme', newMode ? 'dark' : 'light');
+    } catch (e) {
+      console.error("Gagal menyimpan tema:", e);
+    }
+  };
 
   const theme = {
     isDark,
     toggleTheme,
     colors: isDark ? {
-      // PALET MODE GELAP (Dark Navy & Slate)
-      background: '#0f172a',    // Background utama gelap banget
-      card: '#1e293b',          // Background kartu agak terang
-      text: '#f1f5f9',          // Teks utama putih
-      subText: '#94a3b8',       // Teks deskripsi abu-abu
-      primary: '#38bdf8',       // Biru muda neon
-      iconBg: '#334155',        // Background ikon bulat
-      border: '#334155',        // Garis batas
+      background: '#0f172a',
+      card: '#1e293b',
+      text: '#f1f5f9',
+      subText: '#94a3b8',
+      primary: '#38bdf8',
+      iconBg: '#334155',
+      border: '#334155',
       headerText: '#fff'
     } : {
-      // PALET MODE TERANG (Clean White & Blue)
       background: '#f8f9fa',
       card: '#ffffff',
       text: '#2c3e50',
       subText: '#7f8c8d',
       primary: '#004e92',
-      iconBg: '#fef5e7',        // Background ikon (variatif nanti di screen)
+      iconBg: '#fef5e7',
       border: '#e1e1e1',
       headerText: '#fff'
     }
