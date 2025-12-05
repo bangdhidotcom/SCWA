@@ -8,6 +8,8 @@ import { deviceService } from '../../services/deviceService';
 import { useTheme } from '../../services/ThemeContext';
 
 const screenWidth = Dimensions.get('window').width;
+const FIXED_Y_AXIS_WIDTH = 40; // Lebar area sumbu Y yang diam
+const CHART_HEIGHT = 280; // Tinggi grafik disamakan
 
 export default function RiwayatScreen() {
   const { colors, isDark } = useTheme();
@@ -18,13 +20,14 @@ export default function RiwayatScreen() {
   const [reversedData, setReversedData] = useState([]);
   
   const [activeMetric, setActiveMetric] = useState('suhu'); 
-  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, value: 0, index: 0 });
+  // Tambah state 'position' ('top' atau 'bottom')
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, value: 0, index: 0, position: 'top' });
 
   const scrollViewRef = useRef();
 
   const loadData = async () => {
     setIsLoading(true);
-    setTooltip({ visible: false, x: 0, y: 0, value: 0, index: 0 }); 
+    setTooltip({ visible: false, x: 0, y: 0, value: 0, index: 0, position: 'top' }); 
     try {
       const data = await deviceService.getHistory('SCWA_001');
       if (data && data.length > 0) {
@@ -42,6 +45,22 @@ export default function RiwayatScreen() {
     loadData();
   }, []);
 
+  // Hitung Min/Max Manual agar kedua grafik SINKRON
+  const getMinMax = () => {
+    if (!reversedData.length) return { min: 0, max: 100 };
+    const values = reversedData.map(d => d[activeMetric]);
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    
+    // Beri "Headroom" (+5) agar tooltip tidak kepotong di atas
+    return {
+      min: Math.floor(minVal - 2), 
+      max: Math.ceil(maxVal + 5) 
+    };
+  };
+
+  const { min: yAxisMin, max: yAxisMax } = getMinMax();
+
   const getChartColor = (opacity = 1) => {
     if (activeMetric === 'suhu') return `rgba(231, 76, 60, ${opacity})`;
     return `rgba(52, 152, 219, ${opacity})`;
@@ -54,10 +73,9 @@ export default function RiwayatScreen() {
     const totalData = reversedData.length;
 
     const labels = reversedData.map((item, index) => {
-      const isLast = index === totalData - 1;
+      // Tampilkan label jam setiap 6 data
       const isEverySixth = index % 6 === 0;
-
-      if (isLast || isEverySixth) {
+      if (isEverySixth) {
         return format(new Date(item.created_at), 'HH:mm');
       }
       return ''; 
@@ -74,13 +92,33 @@ export default function RiwayatScreen() {
   const handleDataPointClick = (data) => {
     const { x, y, value, index } = data;
     
+    // LOGIKA PINTAR: Jika titik dekat atap (y < 60), tooltip muncul di BAWAH titik
+    const isTooHigh = y < 60;
+
     setTooltip({
       visible: true,
       x: x, 
       y: y,
       value,
-      index
+      index,
+      position: isTooHigh ? 'bottom' : 'top'
     });
+  };
+
+  // Config Chart yang sama persis untuk kedua layer
+  const commonChartConfig = {
+    backgroundColor: colors.card,
+    backgroundGradientFrom: colors.card,
+    backgroundGradientTo: colors.card,
+    decimalPlaces: 0,
+    color: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
+    labelColor: (opacity = 1) => colors.subText,
+    style: { borderRadius: 16 },
+    propsForDots: { r: "4", strokeWidth: "1", stroke: colors.card },
+    propsForBackgroundLines: { strokeDasharray: "5", stroke: isDark ? '#334155' : '#e0e0e0', strokeOpacity: 0.5 },
+    fillShadowGradientFrom: activeMetric === 'suhu' ? '#e74c3c' : '#3498db',
+    fillShadowGradientTo: activeMetric === 'suhu' ? '#e74c3c' : '#3498db',
+    fillShadowGradientOpacity: 0.2,
   };
 
   return (
@@ -92,6 +130,7 @@ export default function RiwayatScreen() {
 
       <View style={[styles.chartCard, { backgroundColor: colors.card }]}>
         
+        {/* Toggle Button Container */}
         <View style={styles.toggleContainer}>
           <TouchableOpacity 
             style={[
@@ -121,74 +160,114 @@ export default function RiwayatScreen() {
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : chartData ? (
-          <ScrollView 
-            horizontal 
-            ref={scrollViewRef}
-            showsHorizontalScrollIndicator={false}
-            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
-          >
-            <View style={{ paddingRight: 20, paddingLeft: 10 }}>
-              <LineChart
-                data={chartData}
-                width={Math.max(screenWidth, reversedData.length * 40)}
-                height={260}
-                chartConfig={{
-                  backgroundColor: colors.card,
-                  backgroundGradientFrom: colors.card,
-                  backgroundGradientTo: colors.card,
-                  decimalPlaces: 0,
-                  color: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
-                  labelColor: (opacity = 1) => colors.subText,
-                  style: { borderRadius: 16 },
-                  propsForDots: { r: "3", strokeWidth: "1", stroke: colors.card },
-                  propsForBackgroundLines: { strokeDasharray: "5", stroke: isDark ? '#334155' : '#e0e0e0', strokeOpacity: 0.5 },
-                  fillShadowGradientFrom: activeMetric === 'suhu' ? '#e74c3c' : '#3498db',
-                  fillShadowGradientTo: activeMetric === 'suhu' ? '#e74c3c' : '#3498db',
-                  fillShadowGradientOpacity: 0.2,
+          <View style={{ height: CHART_HEIGHT, flexDirection: 'row' }}>
+            
+            {/* --- LAYER 1: Sumbu Y Fixed (Kiri/Diam) --- */}
+            <View style={{ width: FIXED_Y_AXIS_WIDTH, overflow: 'hidden', zIndex: 10, backgroundColor: colors.card }}>
+               <LineChart
+                data={{
+                  labels: [], // Dummy
+                  datasets: [{ data: [yAxisMin, yAxisMax] }] // Dummy data hanya untuk skala
                 }}
-                bezier
-                withDots={true}
-                withInnerLines={true}
-                withOuterLines={false}
-                withVerticalLines={false}
-                withHorizontalLabels={true}
+                width={screenWidth} // Lebar tetap full agar scaling SVG sama
+                height={CHART_HEIGHT}
+                yAxisInterval={1}
                 fromZero={false}
-                segments={4}
-                onDataPointClick={handleDataPointClick}
-                formatYLabel={(y) => Math.round(y).toString()}
-                style={{
-                  marginVertical: 8,
-                  borderRadius: 16,
-                  paddingRight: 50,
+                min={yAxisMin} // KUNCI PRESISI 1
+                max={yAxisMax} // KUNCI PRESISI 2
+                chartConfig={{
+                  ...commonChartConfig,
+                  color: () => 'transparent', // Sembunyikan garis data
+                  labelColor: () => colors.subText, // Tampilkan Label Y
                 }}
+                withVerticalLines={false}
+                withHorizontalLines={true}
+                withDots={false}
+                withShadow={false}
+                withInnerLines={true}
+                segments={4}
+                style={{ paddingRight: 40, paddingLeft: 0 }}
               />
-
-              {tooltip.visible && (
-                <View style={[
-                  styles.tooltip, 
-                  { 
-                    left: tooltip.x - 35, 
-                    top: tooltip.y - 45,
-                    backgroundColor: isDark ? '#334155' : '#fff',
-                    borderColor: activeMetric === 'suhu' ? '#e74c3c' : '#3498db'
-                  }
-                ]}>
-                  <Text style={[styles.tooltipValue, { color: colors.text }]}>
-                    {Number(tooltip.value).toFixed(1)}{activeMetric === 'suhu' ? '°C' : '%'}
-                  </Text>
-                  <Text style={[styles.tooltipTime, { color: colors.subText }]}>
-                    {reversedData[tooltip.index] ? format(new Date(reversedData[tooltip.index].created_at), 'HH:mm') : ''}
-                  </Text>
-                </View>
-              )}
             </View>
-          </ScrollView>
+
+            {/* --- LAYER 2: Grafik Data (Kanan/Scrollable) --- */}
+            <ScrollView 
+              horizontal 
+              ref={scrollViewRef}
+              showsHorizontalScrollIndicator={false}
+              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+              style={{ marginLeft: -10 }} // Sedikit overlap agar garis grid nyambung rapi
+            >
+              <View style={{ paddingRight: 40, paddingLeft: 0 }}> 
+                <LineChart
+                  data={chartData}
+                  width={Math.max(screenWidth - FIXED_Y_AXIS_WIDTH, reversedData.length * 45)}
+                  height={CHART_HEIGHT}
+                  yAxisInterval={1}
+                  fromZero={false}
+                  min={yAxisMin} // Harus sama dengan Layer 1
+                  max={yAxisMax} // Harus sama dengan Layer 1
+                  chartConfig={{
+                    ...commonChartConfig,
+                    // Sembunyikan label Y di sini agar tidak tumpang tindih
+                    // trik: set color label jadi transparent atau return string kosong di formatYLabel
+                  }}
+                  formatYLabel={() => ''} // HILANGKAN LABEL Y di layer scroll
+                  bezier
+                  withDots={true}
+                  withInnerLines={true}
+                  withOuterLines={false}
+                  withVerticalLines={false}
+                  withHorizontalLabels={true} // Tetap true, tapi kita kosongkan isinya lewat formatYLabel
+                  segments={4}
+                  onDataPointClick={handleDataPointClick}
+                  style={{
+                    borderRadius: 16,
+                  }}
+                />
+
+                {/* --- TOOLTIP CUSTOM (Ikut Scroll) --- */}
+                {tooltip.visible && (
+                  <View style={[
+                    styles.tooltip, 
+                    { 
+                      left: tooltip.x - 30, // Posisi X (Centered)
+                      // Jika 'bottom', geser ke bawah titik. Jika 'top', geser ke atas.
+                      top: tooltip.position === 'top' ? tooltip.y - 50 : tooltip.y + 10, 
+                      
+                      backgroundColor: isDark ? '#334155' : '#fff',
+                      borderColor: activeMetric === 'suhu' ? '#e74c3c' : '#3498db'
+                    }
+                  ]}>
+                    <Text style={[styles.tooltipValue, { color: colors.text }]}>
+                      {Number(tooltip.value).toFixed(1)}{activeMetric === 'suhu' ? '°C' : '%'}
+                    </Text>
+                    <Text style={[styles.tooltipTime, { color: colors.subText }]}>
+                      {reversedData[tooltip.index] ? format(new Date(reversedData[tooltip.index].created_at), 'HH:mm') : ''}
+                    </Text>
+                    
+                    {/* Panah Kecil (Opsional untuk estetika) */}
+                    <View style={{
+                      position: 'absolute',
+                      [tooltip.position === 'top' ? 'bottom' : 'top']: -6,
+                      borderLeftWidth: 6, borderRightWidth: 6,
+                      borderLeftColor: 'transparent', borderRightColor: 'transparent',
+                      [tooltip.position === 'top' ? 'borderTopWidth' : 'borderBottomWidth']: 6,
+                      [tooltip.position === 'top' ? 'borderTopColor' : 'borderBottomColor']: activeMetric === 'suhu' ? '#e74c3c' : '#3498db',
+                    }}/>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </View>
         ) : (
           <Text style={{ textAlign: 'center', color: colors.subText, marginVertical: 20 }}>Tidak ada data.</Text>
         )}
       </View>
 
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Log Data Terkini</Text>
+      
+      {/* List Log Data tetap sama seperti kode Anda sebelumnya */}
       <View style={styles.logList}>
         {historyData.map((item, index) => (
           <View key={index} style={[styles.logItem, { backgroundColor: colors.card }]}>
@@ -240,9 +319,20 @@ const styles = StyleSheet.create({
   toggleButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
   toggleText: { marginLeft: 6, fontWeight: '600', fontSize: 14 },
 
-  loadingContainer: { height: 250, justifyContent: 'center', alignItems: 'center' },
+  loadingContainer: { height: CHART_HEIGHT, justifyContent: 'center', alignItems: 'center' },
 
-  tooltip: { position: 'absolute', padding: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center', zIndex: 100, minWidth: 70, shadowColor: "#000", shadowOpacity: 0.1, elevation: 6 },
+  tooltip: { 
+    position: 'absolute', 
+    padding: 8, 
+    borderRadius: 8, 
+    borderWidth: 1, 
+    alignItems: 'center', 
+    zIndex: 100, 
+    minWidth: 60, 
+    shadowColor: "#000", 
+    shadowOpacity: 0.1, 
+    elevation: 6 
+  },
   tooltipValue: { fontWeight: 'bold', fontSize: 14 },
   tooltipTime: { fontSize: 10, marginTop: 2 },
 
