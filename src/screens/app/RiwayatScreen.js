@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -19,6 +19,8 @@ export default function RiwayatScreen() {
   
   const [activeMetric, setActiveMetric] = useState('suhu'); 
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, value: 0, index: 0 });
+
+  const scrollViewRef = useRef();
 
   const loadData = async () => {
     setIsLoading(true);
@@ -49,16 +51,21 @@ export default function RiwayatScreen() {
     if (!reversedData.length) return null;
 
     const dataPoints = reversedData.map(item => item[activeMetric]);
+    const totalData = reversedData.length;
+
     const labels = reversedData.map((item, index) => {
-      if (index === 0 || index === Math.floor(reversedData.length / 2) || index === reversedData.length - 1) {
+      const isLast = index === totalData - 1;
+      const isEverySixth = index % 6 === 0;
+
+      if (isLast || isEverySixth) {
         return format(new Date(item.created_at), 'HH:mm');
       }
-      return '';
+      return ''; 
     });
 
     return {
       labels,
-      datasets: [{ data: dataPoints, color: getChartColor, strokeWidth: 3 }],
+      datasets: [{ data: dataPoints, color: getChartColor, strokeWidth: 2 }],
     };
   };
 
@@ -66,10 +73,11 @@ export default function RiwayatScreen() {
 
   const handleDataPointClick = (data) => {
     const { x, y, value, index } = data;
+    
     setTooltip({
       visible: true,
-      x,
-      y,
+      x: x, 
+      y: y,
       value,
       index
     });
@@ -113,57 +121,68 @@ export default function RiwayatScreen() {
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : chartData ? (
-          <View>
-            <LineChart
-              data={chartData}
-              width={screenWidth - 40}
-              height={280}
-              chartConfig={{
-                backgroundColor: colors.card,
-                backgroundGradientFrom: colors.card,
-                backgroundGradientTo: colors.card,
-                decimalPlaces: 1,
-                color: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
-                labelColor: (opacity = 1) => colors.subText,
-                style: { borderRadius: 16 },
-                propsForDots: { r: "4", strokeWidth: "2", stroke: colors.card },
-                propsForBackgroundLines: { strokeDasharray: "", stroke: isDark ? '#334155' : '#f0f0f0' }
-              }}
-              bezier
-              withDots={true}
-              withInnerLines={true}
-              withOuterLines={false}
-              withVerticalLines={false}
-              fromZero={false}
-              onDataPointClick={handleDataPointClick}
-              style={{ marginVertical: 8, borderRadius: 16, paddingRight: 20 }}
-            />
+          <ScrollView 
+            horizontal 
+            ref={scrollViewRef}
+            showsHorizontalScrollIndicator={false}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+          >
+            <View style={{ paddingRight: 20, paddingLeft: 10 }}>
+              <LineChart
+                data={chartData}
+                width={Math.max(screenWidth, reversedData.length * 40)}
+                height={260}
+                chartConfig={{
+                  backgroundColor: colors.card,
+                  backgroundGradientFrom: colors.card,
+                  backgroundGradientTo: colors.card,
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => isDark ? `rgba(255, 255, 255, ${opacity})` : `rgba(0, 0, 0, ${opacity})`,
+                  labelColor: (opacity = 1) => colors.subText,
+                  style: { borderRadius: 16 },
+                  propsForDots: { r: "3", strokeWidth: "1", stroke: colors.card },
+                  propsForBackgroundLines: { strokeDasharray: "5", stroke: isDark ? '#334155' : '#e0e0e0', strokeOpacity: 0.5 },
+                  fillShadowGradientFrom: activeMetric === 'suhu' ? '#e74c3c' : '#3498db',
+                  fillShadowGradientTo: activeMetric === 'suhu' ? '#e74c3c' : '#3498db',
+                  fillShadowGradientOpacity: 0.2,
+                }}
+                bezier
+                withDots={true}
+                withInnerLines={true}
+                withOuterLines={false}
+                withVerticalLines={false}
+                withHorizontalLabels={true}
+                fromZero={false}
+                segments={4}
+                onDataPointClick={handleDataPointClick}
+                formatYLabel={(y) => Math.round(y).toString()}
+                style={{
+                  marginVertical: 8,
+                  borderRadius: 16,
+                  paddingRight: 50,
+                }}
+              />
 
-            {tooltip.visible && (
-              <View style={[
-                styles.tooltip, 
-                { 
-                  left: tooltip.x - 35, 
-                  top: tooltip.y - 45,
-                  backgroundColor: isDark ? '#334155' : '#fff',
-                  borderColor: activeMetric === 'suhu' ? '#e74c3c' : '#3498db'
-                }
-              ]}>
-                <Text style={[styles.tooltipValue, { color: colors.text }]}>
-                  {tooltip.value}{activeMetric === 'suhu' ? '°C' : '%'}
-                </Text>
-                <Text style={[styles.tooltipTime, { color: colors.subText }]}>
-                  {format(new Date(reversedData[tooltip.index].created_at), 'HH:mm')}
-                </Text>
+              {tooltip.visible && (
                 <View style={[
-                  styles.tooltipArrow, 
+                  styles.tooltip, 
                   { 
-                    borderTopColor: activeMetric === 'suhu' ? '#e74c3c' : '#3498db' 
+                    left: tooltip.x - 35, 
+                    top: tooltip.y - 45,
+                    backgroundColor: isDark ? '#334155' : '#fff',
+                    borderColor: activeMetric === 'suhu' ? '#e74c3c' : '#3498db'
                   }
-                ]} />
-              </View>
-            )}
-          </View>
+                ]}>
+                  <Text style={[styles.tooltipValue, { color: colors.text }]}>
+                    {Number(tooltip.value).toFixed(1)}{activeMetric === 'suhu' ? '°C' : '%'}
+                  </Text>
+                  <Text style={[styles.tooltipTime, { color: colors.subText }]}>
+                    {reversedData[tooltip.index] ? format(new Date(reversedData[tooltip.index].created_at), 'HH:mm') : ''}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
         ) : (
           <Text style={{ textAlign: 'center', color: colors.subText, marginVertical: 20 }}>Tidak ada data.</Text>
         )}
@@ -181,11 +200,11 @@ export default function RiwayatScreen() {
             <View style={styles.logDetail}>
               <View style={styles.logMetric}>
                 <Icon name="thermometer" size={16} color="#e74c3c" />
-                <Text style={[styles.logValue, { color: colors.text }]}>{item.suhu.toFixed(1)}°C</Text>
+                <Text style={[styles.logValue, { color: colors.text }]}>{Number(item.suhu).toFixed(1)}°C</Text>
               </View>
               <View style={styles.logMetric}>
                 <Icon name="water-percent" size={16} color="#3498db" />
-                <Text style={[styles.logValue, { color: colors.text }]}>{item.kelembapan.toFixed(0)}%</Text>
+                <Text style={[styles.logValue, { color: colors.text }]}>{Number(item.kelembapan).toFixed(0)}%</Text>
               </View>
             </View>
             <View style={[styles.logStatus, { backgroundColor: item.status_ldr === 'GELAP' ? (isDark ? '#064e3b' : '#e8f8f5') : (isDark ? '#450a0a' : '#fdedec') }]}>
@@ -204,18 +223,28 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   pageTitle: { fontSize: 28, fontWeight: 'bold', marginBottom: 20, marginTop: 30 },
   
-  chartCard: { borderRadius: 24, padding: 10, marginBottom: 25, elevation: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 5 },
+  chartCard: { 
+    borderRadius: 24, 
+    paddingVertical: 15, 
+    paddingHorizontal: 0,
+    marginBottom: 25, 
+    elevation: 4, 
+    shadowColor: "#000", 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 5,
+    overflow: 'hidden' 
+  },
   
-  toggleContainer: { flexDirection: 'row', justifyContent: 'center', marginVertical: 15, gap: 15 },
+  toggleContainer: { flexDirection: 'row', justifyContent: 'center', marginBottom: 15, gap: 15 },
   toggleButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
   toggleText: { marginLeft: 6, fontWeight: '600', fontSize: 14 },
 
   loadingContainer: { height: 250, justifyContent: 'center', alignItems: 'center' },
 
-  tooltip: { position: 'absolute', padding: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center', zIndex: 10, minWidth: 70, shadowColor: "#000", shadowOpacity: 0.1, elevation: 5 },
+  tooltip: { position: 'absolute', padding: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center', zIndex: 100, minWidth: 70, shadowColor: "#000", shadowOpacity: 0.1, elevation: 6 },
   tooltipValue: { fontWeight: 'bold', fontSize: 14 },
   tooltipTime: { fontSize: 10, marginTop: 2 },
-  tooltipArrow: { position: 'absolute', bottom: -5, left: '45%', width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 5, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
 
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
   logList: { paddingBottom: 40 },
