@@ -13,8 +13,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logodua.png",
-        "backgroundColor": "#CDE4F5"
+        "foregroundImage": "./assets/images/logo-menu.png",
+        "backgroundColor": "#004e92"
       },
       "package": "com.bangdhi.SCWAApp",
       "versionCode": 2,
@@ -40,8 +40,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/logodua.png",
-          "color": "#CDE4F5",
+          "icon": "./assets/images/logo-notif.png", 
+          "color": "#004e92",
           "defaultChannel": "default"
         }
       ]
