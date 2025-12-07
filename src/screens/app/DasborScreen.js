@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import HomeHeader from '../../components/HomeHeader';
@@ -19,8 +19,6 @@ export default function DasborScreen({ navigation }) {
   const [weather, setWeather] = useState(null); 
   const [deviceId, setDeviceId] = useState(null); 
   const [isLoading, setIsLoading] = useState(true);
-
-  const lastStatusLDR = useRef("GELAP"); 
 
   useEffect(() => {
     const initDashboard = async () => {
@@ -51,15 +49,7 @@ export default function DasborScreen({ navigation }) {
     if (!deviceId) return;
 
     const unsubscribe = deviceService.listenToDevice(deviceId, (newData) => {
-      if (newData) {
-        setData((prev) => ({ ...prev, ...newData }));
-
-        if (newData.status_ldr === 'TERANG' && lastStatusLDR.current !== 'TERANG') {
-           notificationService.sendLocalLightWarning();
-        }
-
-        lastStatusLDR.current = newData.status_ldr;
-      }
+      if (newData) setData((prev) => ({ ...prev, ...newData }));
     });
 
     return () => unsubscribe();

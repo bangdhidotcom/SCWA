@@ -4,7 +4,7 @@
     "slug": "SCWA-App",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logodua.png", 
+    "icon": "./assets/images/logodua.png",
     "scheme": "scwaapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logodua.png",
-        "backgroundColor": "#E6F4FE"
+        "backgroundColor": "#CDE4F5"
       },
       "package": "com.bangdhi.SCWAApp",
       "versionCode": 1,
@@ -35,6 +35,14 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#CDE4F5"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logodua.png",
+          "color": "#CDE4F5",
+          "defaultChannel": "default"
         }
       ]
     ],
