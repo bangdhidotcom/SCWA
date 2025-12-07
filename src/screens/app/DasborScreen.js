@@ -145,7 +145,7 @@ export default function DasborScreen({ navigation }) {
               <Text style={styles.wideCardDesc}>
                 {data.status_ldr === 'GELAP' 
                   ? "Kondisi aman. Burung walet nyaman." 
-                  : "PERINGATAN: Ada cahaya masuk!"}
+                  : "PERINGATAN: Ada cahaya masuk! Periksa ventilasi."}
               </Text>
             </View>
           </>
