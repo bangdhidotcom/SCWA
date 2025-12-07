@@ -5,7 +5,7 @@ import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAlert } from '../../services/AlertContext';
 import { deviceService } from '../../services/deviceService';
-import { supabase } from '../../services/supabase'; // Import Supabase
+import { supabase } from '../../services/supabase';
 import { useTheme } from '../../services/ThemeContext';
 
 const screenWidth = Dimensions.get('window').width;
@@ -20,54 +20,86 @@ export default function RiwayatScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [historyData, setHistoryData] = useState([]);
   const [reversedData, setReversedData] = useState([]);
-  const [deviceId, setDeviceId] = useState(null); // State untuk ID Alat
+  const [deviceId, setDeviceId] = useState(null);
   
   const [activeMetric, setActiveMetric] = useState('suhu'); 
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, value: 0, index: 0, position: 'top' });
 
   const scrollViewRef = useRef();
 
-  // Fungsi Load Data yang Pintar (Cari ID dulu kalau belum ada)
-  const loadData = async () => {
-    setIsLoading(true);
-    setTooltip({ visible: false, x: 0, y: 0, value: 0, index: 0, position: 'top' }); 
-    
-    try {
-      let currentDeviceId = deviceId;
+  useEffect(() => {
+    let subscription;
 
-      // Jika ID belum ada di state, cari dulu ke Supabase
-      if (!currentDeviceId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const device = await deviceService.getUserDevice(user.id);
-          if (device) {
-            currentDeviceId = device.device_id;
-            setDeviceId(currentDeviceId); // Simpan biar nanti ga cari lagi
+    const init = async () => {
+      try {
+        let currentId = deviceId;
+        if (!currentId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const device = await deviceService.getUserDevice(user.id);
+            if (device) {
+              currentId = device.device_id;
+              setDeviceId(currentId);
+            }
           }
         }
-      }
 
-      if (currentDeviceId) {
-        const data = await deviceService.getHistory(currentDeviceId);
-        if (data && data.length > 0) {
-          setHistoryData(data);
-          setReversedData([...data].reverse());
-        } else {
-          setHistoryData([]);
-          setReversedData([]);
+        if (currentId) {
+          const data = await deviceService.getHistory(currentId);
+          if (data) {
+            setHistoryData(data);
+            setReversedData([...data].reverse());
+          }
+
+          subscription = supabase
+            .channel(`public:sensor_logs:history:${currentId}`)
+            .on(
+              'postgres_changes',
+              {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'sensor_logs',
+                filter: `device_id=eq.${currentId}`,
+              },
+              (payload) => {
+                const newData = payload.new;
+                setHistoryData(prev => [newData, ...prev]);
+                setReversedData(prev => [...prev, newData]);
+                
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 500);
+              }
+            )
+            .subscribe();
         }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error(error);
-      showAlert("Gagal", "Gagal memuat data riwayat.", "error");
+    };
+
+    init();
+
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
+  }, []);
+
+  const loadData = async () => {
+    if (!deviceId) return;
+    setIsLoading(true);
+    try {
+      const data = await deviceService.getHistory(deviceId);
+      if (data) {
+        setHistoryData(data);
+        setReversedData([...data].reverse());
+      }
     } finally {
       setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const calculateNiceScale = (minValue, maxValue) => {
     if (minValue === Infinity || maxValue === -Infinity) return { min: 0, max: 100 };
@@ -230,7 +262,7 @@ export default function RiwayatScreen() {
               horizontal 
               ref={scrollViewRef}
               showsHorizontalScrollIndicator={false}
-              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
               style={{ marginLeft: -1 }}
             >
               <View style={{ paddingRight: 40, paddingLeft: 0 }}> 
@@ -252,7 +284,7 @@ export default function RiwayatScreen() {
                   withInnerLines={true}
                   withOuterLines={false}
                   withVerticalLines={false}
-                  withHorizontalLabels={true} 
+                  withHorizontalLabels={false} 
                   onDataPointClick={handleDataPointClick}
                   style={{
                     borderRadius: 16,
