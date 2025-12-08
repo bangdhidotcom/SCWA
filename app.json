@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo-menu.png",
-        "backgroundColor": "#004e92"
+        "backgroundColor": "#000000"
       },
       "package": "com.bangdhi.SCWAApp",
       "versionCode": 2,
